@@ -19,3 +19,5 @@ This program dumps a list of things:
 4) Go to Config/config.json in the directory you extracted SBRW Dumper into.
 5) Open it, enter your email and password then save it.
 6) Run "start.bat", if there is no errors, it should work.
+# Example usage of this program
+![Animation](https://user-images.githubusercontent.com/56766256/216125266-cfc5d0c7-5d42-4041-83fa-d690828bec3c.gif)

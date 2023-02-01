@@ -11,5 +11,11 @@ This program dumps a list of things:
 - Your achievements
 - Your driver info
 - Your inventory
-Everything will be saved into a folder called "Dumped".
+### Everything will be saved into a folder called "Dumped".
 # How to use this program
+1) Install [NodeJS](https://nodejs.org/en/).
+2) Download and Extract SBRW Dumper to a safe location.
+3) Run "install_packages.bat" to install all the required modules.
+4) Go to Config/config.json in the directory you extracted SBRW Dumper into.
+5) Open it, enter your email and password then save it.
+6) Run "start.bat", if there is no errors, it should work.

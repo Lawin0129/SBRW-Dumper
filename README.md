@@ -6,7 +6,7 @@ You can find out more here: [https://soapboxrace.world/](https://soapboxrace.wor
 This program dumps/saves your account data from your chosen soapbox race world server for offline use or archival purposes.
 This program dumps a list of things:
 - Car Slots (Your owned cars)
-- Treasure Hunt Info
+- Your Treasure Hunt Info
 - Your friends list
 - Your achievements
 - Your driver info

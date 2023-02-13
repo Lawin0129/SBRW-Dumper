@@ -29,7 +29,7 @@ async function GetServerList() {
 
         for (var i in serverList.data) {
             if (serverList.data[i].category == "SBRW") {
-                servers.push({ name: serverList.data[i].name, url: serverList.data[i].ip_address, index: Number(i) });
+                servers.push({ id: serverList.data[i].id, name: serverList.data[i].name, url: serverList.data[i].ip_address, index: Number(i) });
             }
         }
 
@@ -139,10 +139,26 @@ async function SecureLoginPersona(personaId) {
     if (loginPersona.status == 200) return { data: loginPersona.data, status: loginPersona.status };
 }
 
-async function CarSlots(personaId) {
+async function DefaultCar(personaId) {
+    let err;
+    const Car = await axios
+        .get(`${sbrwServer}/personas/${personaId}/defaultcar`,
+        gameHeaders(authToken, userNum)).catch(error => err = { data: error.response.data, status: error.response.status });
+    if (err) return err;
+
+    if (Car.status == 200) return { data: Car.data, status: Car.status };
+}
+
+async function CarSlots(personaId, options) {
+    let cars = "carslots";
+
+    if (options) {
+        if (options.dumpSomeone) cars = "cars";
+    }
+
     let err;
     const CarSlot = await axios
-        .get(`${sbrwServer}/personas/${personaId}/carslots?language=EN`,
+        .get(`${sbrwServer}/personas/${personaId}/${cars}?language=EN`,
         gameHeaders(authToken, userNum)).catch(error => err = { data: error.response.data, status: error.response.status });
     if (err) return err;
 
@@ -216,6 +232,7 @@ module.exports = {
     authenticateUser,
     SecureLogout,
     SecureLoginPersona,
+    DefaultCar,
     CarSlots,
     GetTreasureHunt,
     GetFriendsList,

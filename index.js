@@ -1,6 +1,7 @@
 const config = require("./Config/config.json");
 const xml2js = require("xml2js");
 const XML2JS = new xml2js.Parser();
+const builder = new xml2js.Builder();
 const fs = require("fs");
 const path = require("path");
 const ReadLine = require("readline").createInterface({
@@ -9,8 +10,10 @@ const ReadLine = require("readline").createInterface({
 });
 
 const requests = require("./managers/requests.js");
+const wuggApi = require("./managers/wuggapi.js");
 
 ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answer) => {
+    let dumpSomeone = false;
     let personaId;
     let server;
     let newDate = (new Date().toISOString()).replace(/:/ig, "-").replace("T", " ").replace("Z", "").split(".")[0]
@@ -21,17 +24,35 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
         const serverList = await requests.GetServerList();
         if (serverList.status >= 400) return console.log({ error: serverList.data, solution: "Unknown" });
+
+        const options = [
+            { name: "Dump your own data", index: 0 },
+            { name: "Dump someone elses data by their driver name (WorldUnited.gg only)", index: 1 },
+            { name: "Dump someone elses data by their personaId (All Servers)", index: 2 }
+        ];
+
+        let optionString = "";
+        options.forEach(a => optionString += ` [${a.index}] ${a.name}\n`);
+
+        const option = await askQuestion(`\nSelect an option:\n${optionString}`);
+
+        if (Number(option) == 0 || Number(option) == 2) {
+            let servers = "";
+            serverList.data.forEach(a => servers += ` [${a.index}] ${a.name}\n`);
     
-        let servers = "";
-        serverList.data.forEach(a => servers += ` [${a.index}] ${a.name}\n`);
+            const ans = await askQuestion(`\nSelect a server:\n${servers}`);
     
-        const ans = await askQuestion(`\nSelect a server:\n${servers}`);
-    
-        if (serverList.data.find(i => i.index == Number(ans))) server = serverList.data.find(i => i.index == Number(ans));
-        if (serverList.data.find(i => i.name == ans)) server = serverList.data.find(i => i.name == ans);
-    
+            if (serverList.data.find(i => i.index == Number(ans))) server = serverList.data.find(i => i.index == Number(ans));
+            if (serverList.data.find(i => i.name == ans)) server = serverList.data.find(i => i.name == ans);
+
+            if (Number(option) == 2) dumpSomeone = true;
+        } else if (Number(option) == 1) {
+            dumpSomeone = true;
+            if (serverList.data.find(i => i.id.toLowerCase() == "wugg")) server = serverList.data.find(i => i.id.toLowerCase() == "wugg");
+        }
+
         if (!server) {
-            console.log("ERROR: Not a valid option.\nClosing in 5 seconds...");
+            console.log("ERROR: Not a valid option / server not found...\nClosing in 5 seconds...");
             await sleep(5000);
             process.exit(0);
         }
@@ -48,14 +69,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
         XML2JS.parseString(session.data, (err, result) => sessionData = result);
 
-        if (!sessionData.UserInfo.personas[0].ProfileData) {
-            console.log("\nERROR: This account is new, please set the driver up before you use this program.\nClosing in 5 seconds...");
-            await sleep(5000);
-            process.exit(0);
-        }
-
         // Select driver
-        if (sessionData.UserInfo.personas[0].ProfileData.length > 0) {
+        if (!dumpSomeone) {
+            if (!sessionData.UserInfo.personas[0].ProfileData) {
+                console.log("\nERROR: This account is new, please set the driver up before you use this program.\nClosing in 5 seconds...");
+                await sleep(5000);
+                process.exit(0);
+            }
+
             let drivers = [];
 
             for (let i in sessionData.UserInfo.personas[0].ProfileData) {
@@ -81,58 +102,141 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
                 process.exit(0);
             }
 
-            dumpFolder = path.join(dumpFolder, `${driver.name} (${driver.personaId})`);
+            dumpFolder = path.join(dumpFolder, `${driver.name} (${personaId})`);
             if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
 
             dumpFolder = path.join(dumpFolder, newDate);
             fs.mkdirSync(dumpFolder);
+        } else if (Number(option) == 1) {
+            const driver = await askQuestion("\nEnter a driver name to dump: ");
+            const driverSearch = await wuggApi.findUserbyName(driver);
+            if (driverSearch.status >= 400) return console.log({ error: driverSearch.data, solution: "This driver does not exist, please enter a valid driver name next time." });
+
+            personaId = driverSearch.data.id;
+
+            dumpFolder = path.join(dumpFolder, `${driverSearch.data.name} (${personaId})`);
+            if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
+
+            dumpFolder = path.join(dumpFolder, newDate);
+            fs.mkdirSync(dumpFolder);
+
+            console.log(`\nDriver ${driverSearch.data.name} (personaId: ${personaId}) will now be dumped...\n`)
+        } else if (Number(option) == 2) {
+            const persona = await askQuestion("\nEnter a personaId to dump: ");
+
+            let personaResults;
+            const PersonaInfo = await requests.GetPersonaInfo(persona);
+            if (PersonaInfo.status >= 400) return console.log({ error: PersonaInfo.data, solution: "The personaId you entered does not exist, please enter a valid personaId next time." });
+
+            XML2JS.parseString(PersonaInfo.data, (err, result) => personaResults = result);
+
+            personaId = personaResults.ProfileData.PersonaId[0];
+
+            dumpFolder = path.join(dumpFolder, `${personaResults.ProfileData.Name[0]} (${personaId})`);
+            if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
+
+            dumpFolder = path.join(dumpFolder, newDate);
+            fs.mkdirSync(dumpFolder);
+
+            console.log(`\nDriver ${personaResults.ProfileData.Name[0]} (personaId: ${personaId}) will now be dumped...\n`)
+        }
+
+        if (!dumpSomeone) {
+            await sleep(1000);
+
+            // Login to specified driver
+            const loginPersona = await requests.SecureLoginPersona(personaId);
+            if (loginPersona.status >= 400) return console.log({ error: loginPersona.data, solution: "Unknown" });
+
+            console.log("\nSuccessfully logged in to driver!");
         }
 
         await sleep(1000);
 
-        // Login to specified driver
-        const loginPersona = await requests.SecureLoginPersona(personaId);
-        if (loginPersona.status >= 400) return console.log({ error: loginPersona.data, solution: "Unknown" });
-
-        console.log("\nSuccessfully logged in to driver!");
-
-        await sleep(1000);
-
         // Dump owned cars
-        const CarSlots = await requests.CarSlots(personaId);
+        const CarSlots = await requests.CarSlots(personaId, { dumpSomeone });
         if (CarSlots.status >= 400) return console.log({ error: CarSlots.data, solution: "Unknown" });
 
-        fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), CarSlots.data);
+        // some trolling
+        if (dumpSomeone) {
+            let carsResults;
+            let defaultCarResults;
+            let carslotsTemplate = {
+                CarSlotInfoTrans: {
+                    CarsOwnedByPersona: [{ OwnedCarTrans: [] }],
+                    DefaultOwnedCarIndex: ["0"],
+                    ObtainableSlots: [],
+                    OwnedCarSlotsCount: ["350"]
+                }
+            }
+
+            const DefaultCar = await requests.DefaultCar(personaId);
+
+            XML2JS.parseString(CarSlots.data, (err, result) => carsResults = result);
+            if (DefaultCar.status == 200) XML2JS.parseString(DefaultCar.data, (err, result) => defaultCarResults = result);
+
+            if (defaultCarResults) {
+                let carIndex = carsResults.ArrayOfOwnedCarTrans.OwnedCarTrans.findIndex(i => JSON.stringify(i) == JSON.stringify(defaultCarResults.OwnedCarTrans));
+
+                if (carIndex) {
+                    carslotsTemplate.CarSlotInfoTrans.DefaultOwnedCarIndex[0] = `${carIndex}`;
+                }
+            }
+
+            carslotsTemplate.CarSlotInfoTrans.CarsOwnedByPersona[0].OwnedCarTrans = carsResults.ArrayOfOwnedCarTrans.OwnedCarTrans;
+
+            let finalCarSlots;
+
+            finalCarSlots = builder.buildObject(carslotsTemplate).split("\n");
+            finalCarSlots.splice(0, 1)
+            finalCarSlots = finalCarSlots.join("\n")
+
+            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), finalCarSlots);
+        } else {
+            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), CarSlots.data);
+        }
+
         console.log("Car slots successfully dumped! (carslots.xml)");
 
         await sleep(1000);
 
-        // Dump treasure hunt info
-        const TreasureHunt = await requests.GetTreasureHunt();
-        if (TreasureHunt.status >= 400) return console.log({ error: TreasureHunt.data, solution: "Unknown" });
+        if (!dumpSomeone) {
+            // Dump treasure hunt info
+            const TreasureHunt = await requests.GetTreasureHunt();
+            if (TreasureHunt.status >= 400) return console.log({ error: TreasureHunt.data, solution: "Unknown" });
 
-        fs.writeFileSync(path.join(dumpFolder, "gettreasurehunteventsession.xml"), TreasureHunt.data);
-        console.log("TreasureHuntSession successfully dumped! (gettreasurehunteventsession.xml)");
+            fs.writeFileSync(path.join(dumpFolder, "gettreasurehunteventsession.xml"), TreasureHunt.data);
+            console.log("TreasureHuntSession successfully dumped! (gettreasurehunteventsession.xml)");
 
-        await sleep(1000);
+            await sleep(1000);
 
-        // Dump friends list
-        const FriendsList = await requests.GetFriendsList();
-        if (FriendsList.status >= 400) return console.log({ error: FriendsList.data, solution: "Unknown" });
+            // Dump friends list
+            const FriendsList = await requests.GetFriendsList();
+            if (FriendsList.status >= 400) return console.log({ error: FriendsList.data, solution: "Unknown" });
 
-        fs.writeFileSync(path.join(dumpFolder, "getfriendlistfromuserid.xml"), FriendsList.data);
-        console.log("FriendsList successfully dumped! (getfriendlistfromuserid.xml)");
+            fs.writeFileSync(path.join(dumpFolder, "getfriendlistfromuserid.xml"), FriendsList.data);
+            console.log("FriendsList successfully dumped! (getfriendlistfromuserid.xml)");
 
-        await sleep(1000);
+            await sleep(1000);
 
-        // Dump achievements
-        const Achievements = await requests.GetAchievements();
-        if (Achievements.status >= 400) return console.log({ error: Achievements.data, solution: "Unknown" });
+            // Dump achievements
+            const Achievements = await requests.GetAchievements();
+            if (Achievements.status >= 400) return console.log({ error: Achievements.data, solution: "Unknown" });
 
-        fs.writeFileSync(path.join(dumpFolder, "loadall.xml"), Achievements.data);
-        console.log("Achievements successfully dumped! (loadall.xml)");
+            fs.writeFileSync(path.join(dumpFolder, "loadall.xml"), Achievements.data);
+            console.log("Achievements successfully dumped! (loadall.xml)");
 
-        await sleep(1000);
+            await sleep(1000);
+
+            // Dump inventory
+            const Inventory = await requests.GetInventory();
+            if (Inventory.status >= 400) return console.log({ error: Inventory.data, solution: "Unknown" });
+        
+            fs.writeFileSync(path.join(dumpFolder, "objects.xml"), Inventory.data);
+            console.log("Inventory successfully dumped! (objects.xml)");
+        
+            await sleep(1000);
+        }
 
         // Dump driver info
         const PersonaInfo = await requests.GetPersonaInfo(personaId);
@@ -152,18 +256,11 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
         await sleep(1000);
 
-        // Dump inventory
-        const Inventory = await requests.GetInventory();
-        if (Inventory.status >= 400) return console.log({ error: Inventory.data, solution: "Unknown" });
-
-        fs.writeFileSync(path.join(dumpFolder, "objects.xml"), Inventory.data);
-        console.log("Inventory successfully dumped! (objects.xml)");
-
-        await sleep(1000);
-
-        // Log out
-        const Logout = await requests.SecureLogout(personaId);
-        if (Logout.status >= 400) return console.log({ error: Logout.data, solution: "Unknown" });
+        if (!dumpSomeone) {
+            // Log out
+            const Logout = await requests.SecureLogout(personaId);
+            if (Logout.status >= 400) return console.log({ error: Logout.data, solution: "Unknown" });
+        }
 
         console.log(`\nLogged out of ${config.email}`);
 

@@ -60,7 +60,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         dumpFolder = path.join(dumpFolder, server.name.replace(/[/\\?%*:|"<>]/g, ''));
         if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
 
-        await sleep(2000);
+        await sleep(1000);
 
         // Authenticate User and Get Session
         const session = await requests.authenticateUser(config.email, config.password, server.url);

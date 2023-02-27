@@ -1,7 +1,7 @@
 const config = require("./Config/config.json");
 const xml2js = require("xml2js");
 const XML2JS = new xml2js.Parser();
-const builder = new xml2js.Builder();
+const builder = new xml2js.Builder({ headless: true });
 const fs = require("fs");
 const path = require("path");
 const ReadLine = require("readline").createInterface({
@@ -185,13 +185,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
             carslotsTemplate.CarSlotInfoTrans.CarsOwnedByPersona[0].OwnedCarTrans = carsResults.ArrayOfOwnedCarTrans.OwnedCarTrans;
 
-            let finalCarSlots;
-
-            finalCarSlots = builder.buildObject(carslotsTemplate).split("\n");
-            finalCarSlots.splice(0, 1)
-            finalCarSlots = finalCarSlots.join("\n")
-
-            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), finalCarSlots);
+            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), builder.buildObject(carslotsTemplate));
         } else {
             fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), CarSlots.data);
         }

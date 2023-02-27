@@ -6,16 +6,16 @@ You can find out more here: [https://soapboxrace.world/](https://soapboxrace.wor
 This program dumps/saves your account data or someone elses data from your chosen soapbox race world server for offline use or archival purposes.
 ### Option 1
 This is what the program dumps if you choose to dump your own data:
-- Car Slots (Your owned cars)
-- Your Treasure Hunt Info
-- Your friends list
-- Your achievements
-- Your driver info
-- Your inventory
+- Your owned cars (carslots.xml)
+- Your Treasure Hunt Info (gettreasurehunteventsession.xml)
+- Your friends list (getfriendlistfromuserid.xml)
+- Your achievements (loadall.xml)
+- Your driver info (GetPersonaInfo.xml & GetPersonaBase.xml)
+- Your inventory (objects.xml)
 ### Option 2
 This is what the program dumps if you choose to dump someone elses data:
-- Car Slots (Their owned cars)
-- Their driver info
+- Their owned cars (carslots.xml)
+- Their driver info (GetPersonaInfo.xml & GetPersonaBase.xml)
 ### Everything will be saved into a folder called "Dumped".
 # How to use this program
 1) Install [NodeJS](https://nodejs.org/en/).
@@ -25,6 +25,6 @@ This is what the program dumps if you choose to dump someone elses data:
 5) Open it, enter your email and password then save it.
 6) Run "start.bat", if there is no errors, it should work.
 # Example of dumping your own data
-![Animation](https://user-images.githubusercontent.com/56766256/218454598-df479b51-da12-4b51-b3fa-ef128d439580.gif)
+![Animation](https://user-images.githubusercontent.com/56766256/221670305-08232120-3ba7-483f-83e4-d5704274c7b4.gif)
 # Example of dumping someone elses data
-![Animation2](https://user-images.githubusercontent.com/56766256/218452844-1b11c3f7-4ebb-4a67-a3f7-3ac562d03335.gif)
+![Animation2](https://user-images.githubusercontent.com/56766256/221672632-e07beb27-fa9f-4d35-b2cd-c0e9c8cacf93.gif)

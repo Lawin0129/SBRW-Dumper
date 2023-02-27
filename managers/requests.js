@@ -195,6 +195,16 @@ async function GetAchievements() {
     if (Achievements.status == 200) return { data: Achievements.data, status: Achievements.status };
 }
 
+async function GetPersonaPresence(driverName) {
+    let err;
+    const PersonaInfo = await axios
+        .get(`${sbrwServer}/DriverPersona/GetPersonaPresenceByName?displayName=${driverName}`,
+        gameHeaders(authToken, userNum)).catch(error => err = { data: error.response.data, status: error.response.status });
+    if (err) return err;
+
+    if (PersonaInfo.status == 200) return { data: PersonaInfo.data, status: PersonaInfo.status };
+}
+
 async function GetPersonaInfo(personaId) {
     let err;
     const PersonaInfo = await axios
@@ -237,6 +247,7 @@ module.exports = {
     GetTreasureHunt,
     GetFriendsList,
     GetAchievements,
+    GetPersonaPresence,
     GetPersonaInfo,
     GetPersonaBase,
     GetInventory

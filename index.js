@@ -1,7 +1,7 @@
 const config = require("./Config/config.json");
 const xml2js = require("xml2js");
 const XML2JS = new xml2js.Parser();
-const builder = new xml2js.Builder({ headless: true });
+const builder = new xml2js.Builder({ renderOpts: { pretty: false }, headless: true });
 const fs = require("fs");
 const path = require("path");
 const ReadLine = require("readline").createInterface({
@@ -10,7 +10,6 @@ const ReadLine = require("readline").createInterface({
 });
 
 const requests = require("./managers/requests.js");
-const wuggApi = require("./managers/wuggapi.js");
 
 ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answer) => {
     let dumpSomeone = false;
@@ -27,8 +26,8 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
         const options = [
             { name: "Dump your own data", index: 0 },
-            { name: "Dump someone elses data by their driver name (WorldUnited.gg only)", index: 1 },
-            { name: "Dump someone elses data by their personaId (All Servers)", index: 2 }
+            { name: "Dump someone elses data by their driver name", index: 1 },
+            { name: "Dump someone elses data by their personaId", index: 2 }
         ];
 
         let optionString = "";
@@ -36,20 +35,15 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
         const option = await askQuestion(`\nSelect an option:\n${optionString}`);
 
-        if (Number(option) == 0 || Number(option) == 2) {
-            let servers = "";
-            serverList.data.forEach(a => servers += ` [${a.index}] ${a.name}\n`);
+        let servers = "";
+        serverList.data.forEach(a => servers += ` [${a.index}] ${a.name}\n`);
     
-            const ans = await askQuestion(`\nSelect a server:\n${servers}`);
+        const ans = await askQuestion(`\nSelect a server:\n${servers}`);
     
-            if (serverList.data.find(i => i.index == Number(ans))) server = serverList.data.find(i => i.index == Number(ans));
-            if (serverList.data.find(i => i.name == ans)) server = serverList.data.find(i => i.name == ans);
+        if (serverList.data.find(i => i.index == Number(ans))) server = serverList.data.find(i => i.index == Number(ans));
+        if (serverList.data.find(i => i.name == ans)) server = serverList.data.find(i => i.name == ans);
 
-            if (Number(option) == 2) dumpSomeone = true;
-        } else if (Number(option) == 1) {
-            dumpSomeone = true;
-            if (serverList.data.find(i => i.id.toLowerCase() == "wugg")) server = serverList.data.find(i => i.id.toLowerCase() == "wugg");
-        }
+        if (Number(option) == 1 || Number(option) == 2) dumpSomeone = true;
 
         if (!server) {
             console.log("ERROR: Not a valid option / server not found...\nClosing in 5 seconds...");
@@ -109,18 +103,25 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             fs.mkdirSync(dumpFolder);
         } else if (Number(option) == 1) {
             const driver = await askQuestion("\nEnter a driver name to dump: ");
-            const driverSearch = await wuggApi.findUserbyName(driver);
+            let driverSearch = await requests.GetPersonaPresence(driver);
             if (driverSearch.status >= 400) return console.log({ error: driverSearch.data, solution: "This driver does not exist, please enter a valid driver name next time." });
 
-            personaId = driverSearch.data.id;
+            XML2JS.parseString(driverSearch.data, (err, result) => driverSearch = result);
 
-            dumpFolder = path.join(dumpFolder, `${driverSearch.data.name} (${personaId})`);
+            personaId = driverSearch.PersonaPresence.personaId[0];
+
+            let PersonaInfo = await requests.GetPersonaInfo(personaId);
+            if (PersonaInfo.status >= 400) return console.log({ error: PersonaInfo.data, solution: "Unknown" });
+
+            XML2JS.parseString(PersonaInfo.data, (err, result) => PersonaInfo = result);
+
+            dumpFolder = path.join(dumpFolder, `${PersonaInfo.ProfileData.Name[0]} (${personaId})`);
             if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
 
             dumpFolder = path.join(dumpFolder, newDate);
             fs.mkdirSync(dumpFolder);
 
-            console.log(`\nDriver ${driverSearch.data.name} (personaId: ${personaId}) will now be dumped...\n`)
+            console.log(`\nDriver ${PersonaInfo.ProfileData.Name[0]} (personaId: ${personaId}) will now be dumped...\n`);
         } else if (Number(option) == 2) {
             const persona = await askQuestion("\nEnter a personaId to dump: ");
 
@@ -138,7 +139,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             dumpFolder = path.join(dumpFolder, newDate);
             fs.mkdirSync(dumpFolder);
 
-            console.log(`\nDriver ${personaResults.ProfileData.Name[0]} (personaId: ${personaId}) will now be dumped...\n`)
+            console.log(`\nDriver ${personaResults.ProfileData.Name[0]} (personaId: ${personaId}) will now be dumped...\n`);
         }
 
         if (!dumpSomeone) {
@@ -165,7 +166,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
                 CarSlotInfoTrans: {
                     CarsOwnedByPersona: [{ OwnedCarTrans: [] }],
                     DefaultOwnedCarIndex: ["0"],
-                    ObtainableSlots: [],
+                    ObtainableSlots: [""],
                     OwnedCarSlotsCount: ["350"]
                 }
             }

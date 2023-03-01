@@ -197,12 +197,12 @@ async function GetAchievements() {
 
 async function GetPersonaPresence(driverName) {
     let err;
-    const PersonaInfo = await axios
+    const PersonaPresence = await axios
         .get(`${sbrwServer}/DriverPersona/GetPersonaPresenceByName?displayName=${driverName}`,
         gameHeaders(authToken, userNum)).catch(error => err = { data: error.response.data, status: error.response.status });
     if (err) return err;
 
-    if (PersonaInfo.status == 200) return { data: PersonaInfo.data, status: PersonaInfo.status };
+    if (PersonaPresence.status == 200) return { data: PersonaPresence.data, status: PersonaPresence.status };
 }
 
 async function GetPersonaInfo(personaId) {

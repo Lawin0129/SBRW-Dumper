@@ -35,7 +35,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
         const option = await askQuestion(`\nSelect an option:\n${optionString}`);
         
-        if (!options.find(x => x.index == Number(option)) {
+        if (!options.find(x => x.index == Number(option))) {
             console.log("ERROR: Not a valid option...\nClosing in 5 seconds...");
             await sleep(5000);
             process.exit(0);

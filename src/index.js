@@ -9,7 +9,7 @@ const ReadLine = require("readline").createInterface({
     output: process.stdout
 });
 
-const requests = require("../src/services/requests");
+const requests = require("./services/sbrw");
 
 ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answer) => {
     let dumpSomeone = false;
@@ -21,8 +21,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
     if (Answer.toLowerCase() == "yes" || Answer.toLowerCase() == "y") {
         if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
 
-        const serverList = await requests.GetServerList();
-        if (serverList.status >= 400) return console.log({ error: serverList.data, solution: "Unknown" });
+        let serverList;
+
+        try {
+            serverList = await requests.GetServerList();
+        } catch (err) {
+            logError({ error: err, solution: "Unknown" });
+            return;
+        }
 
         const options = [
             { name: "Dump your own data", index: 0 },
@@ -42,12 +48,12 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         }
 
         let servers = "";
-        serverList.data.forEach(a => servers += ` [${a.index}] ${a.name}\n`);
+        serverList.forEach((s, idx) => servers += ` [${idx}] ${s.name}\n`);
     
         const ans = await askQuestion(`\nSelect a server:\n${servers}`);
     
-        if (serverList.data.find(i => i.index == Number(ans))) server = serverList.data.find(i => i.index == Number(ans));
-        if (serverList.data.find(i => i.name == ans)) server = serverList.data.find(i => i.name == ans);
+        if (serverList[ans]) server = serverList[ans];
+        if (serverList.find(i => i.name == ans)) server = serverList.find(i => i.name == ans);
 
         if (Number(option) == 1 || Number(option) == 2) dumpSomeone = true;
 
@@ -63,10 +69,16 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         await sleep(1000);
 
         // Authenticate User and Get Session
-        const session = await requests.authenticateUser(config.email, config.password, server.url);
-        let sessionData;
-        if (session.status >= 400) return console.log(session);
+        let session;
+        
+        try {
+            session = await requests.authenticateUser(config.email, config.password, server.url);
+        } catch (err) {
+            logError(err);
+            return;
+        }
 
+        let sessionData;
         XML2JS.parseString(session.data, (err, result) => sessionData = result);
 
         // Select driver
@@ -109,15 +121,28 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             fs.mkdirSync(dumpFolder);
         } else if (Number(option) == 1) {
             const driver = await askQuestion("\nEnter a driver name to dump: ");
-            let driverSearch = await requests.GetPersonaPresence(driver);
-            if (driverSearch.status >= 400) return console.log({ error: driverSearch.data, solution: "This driver does not exist, please enter a valid driver name next time." });
+            let driverSearch;
+            
+            try {
+                driverSearch = await requests.GetPersonaPresence(driver);
+            } catch (err) {
+                logError(err);
+                console.log("This driver does not exist, please enter a valid driver name next time.");
+                return;
+            }
 
             XML2JS.parseString(driverSearch.data, (err, result) => driverSearch = result);
 
             personaId = driverSearch.PersonaPresence.personaId[0];
 
-            let PersonaInfo = await requests.GetPersonaInfo(personaId);
-            if (PersonaInfo.status >= 400) return console.log({ error: PersonaInfo.data, solution: "Unknown" });
+            let PersonaInfo;
+
+            try {
+                PersonaInfo = await requests.GetPersonaInfo(personaId);
+            } catch (err) {
+                logError(err);
+                return;
+            }
 
             XML2JS.parseString(PersonaInfo.data, (err, result) => PersonaInfo = result);
 
@@ -132,8 +157,15 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             const persona = await askQuestion("\nEnter a personaId to dump: ");
 
             let personaResults;
-            const PersonaInfo = await requests.GetPersonaInfo(persona);
-            if (PersonaInfo.status >= 400) return console.log({ error: PersonaInfo.data, solution: "The personaId you entered does not exist, please enter a valid personaId next time." });
+            let PersonaInfo;
+
+            try {
+                PersonaInfo = await requests.GetPersonaInfo(persona);
+            } catch (err) {
+                logError(err);
+                console.log("The personaId you entered does not exist, please enter a valid personaId next time.");
+                return;
+            }
 
             XML2JS.parseString(PersonaInfo.data, (err, result) => personaResults = result);
 
@@ -152,8 +184,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             await sleep(1000);
 
             // Login to specified driver
-            const loginPersona = await requests.SecureLoginPersona(personaId);
-            if (loginPersona.status >= 400) return console.log({ error: loginPersona.data, solution: "Unknown" });
+            let loginPersona;
+
+            try {
+                loginPersona = await requests.SecureLoginPersona(personaId);
+            } catch (err) {
+                logError(err);
+                return;
+            }
 
             console.log("\nSuccessfully logged in to driver!");
         }
@@ -161,12 +199,19 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         await sleep(1000);
 
         // Dump owned cars
-        const CarSlots = await requests.CarSlots(personaId, { dumpSomeone });
-        if (CarSlots.status >= 400) return console.log({ error: CarSlots.data, solution: "Unknown" });
+        let CarSlots;
+
+        try {
+            CarSlots = await requests.CarSlots(personaId, { dumpSomeone });
+        } catch (err) {
+            logError(err);
+            return;
+        }
 
         // some trolling
         if (dumpSomeone) {
             let carsResults;
+            let DefaultCar;
             let defaultCarResults;
             let carslotsTemplate = {
                 CarSlotInfoTrans: {
@@ -177,10 +222,12 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
                 }
             }
 
-            const DefaultCar = await requests.DefaultCar(personaId);
+            try {
+                DefaultCar = await requests.DefaultCar(personaId);
+            } catch {}
 
             XML2JS.parseString(CarSlots.data, (err, result) => carsResults = result);
-            if (DefaultCar.status == 200) XML2JS.parseString(DefaultCar.data, (err, result) => defaultCarResults = result);
+            if (DefaultCar?.status == 200) XML2JS.parseString(DefaultCar.data, (err, result) => defaultCarResults = result);
 
             if (defaultCarResults) {
                 let carIndex = carsResults.ArrayOfOwnedCarTrans.OwnedCarTrans.findIndex(i => JSON.stringify(i) == JSON.stringify(defaultCarResults.OwnedCarTrans));
@@ -203,8 +250,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
         if (!dumpSomeone) {
             // Dump treasure hunt info
-            const TreasureHunt = await requests.GetTreasureHunt();
-            if (TreasureHunt.status >= 400) return console.log({ error: TreasureHunt.data, solution: "Unknown" });
+            let TreasureHunt;
+
+            try {
+                TreasureHunt = await requests.GetTreasureHunt();
+            } catch (err) {
+                logError(err);
+                return;
+            }
 
             fs.writeFileSync(path.join(dumpFolder, "gettreasurehunteventsession.xml"), TreasureHunt.data);
             console.log("TreasureHuntSession successfully dumped! (gettreasurehunteventsession.xml)");
@@ -212,8 +265,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             await sleep(1000);
 
             // Dump friends list
-            const FriendsList = await requests.GetFriendsList();
-            if (FriendsList.status >= 400) return console.log({ error: FriendsList.data, solution: "Unknown" });
+            let FriendsList;
+
+            try {
+                FriendsList = await requests.GetFriendsList();
+            } catch (err) {
+                logError(err);
+                return;
+            }
 
             fs.writeFileSync(path.join(dumpFolder, "getfriendlistfromuserid.xml"), FriendsList.data);
             console.log("FriendsList successfully dumped! (getfriendlistfromuserid.xml)");
@@ -221,8 +280,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             await sleep(1000);
 
             // Dump achievements
-            const Achievements = await requests.GetAchievements();
-            if (Achievements.status >= 400) return console.log({ error: Achievements.data, solution: "Unknown" });
+            let Achievements;
+
+            try {
+                Achievements = await requests.GetAchievements();
+            } catch (err) {
+                logError(err);
+                return;
+            }
 
             fs.writeFileSync(path.join(dumpFolder, "loadall.xml"), Achievements.data);
             console.log("Achievements successfully dumped! (loadall.xml)");
@@ -230,9 +295,15 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             await sleep(1000);
 
             // Dump inventory
-            const Inventory = await requests.GetInventory();
-            if (Inventory.status >= 400) return console.log({ error: Inventory.data, solution: "Unknown" });
-        
+            let Inventory;
+
+            try {
+                Inventory = await requests.GetInventory();
+            } catch (err) {
+                logError(err);
+                return;
+            }
+
             fs.writeFileSync(path.join(dumpFolder, "objects.xml"), Inventory.data);
             console.log("Inventory successfully dumped! (objects.xml)");
         
@@ -240,8 +311,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         }
 
         // Dump driver info
-        const PersonaInfo = await requests.GetPersonaInfo(personaId);
-        if (PersonaInfo.status >= 400) return console.log({ error: PersonaInfo.data, solution: "Unknown" });
+        let PersonaInfo;
+        
+        try {
+            PersonaInfo = await requests.GetPersonaInfo(personaId);
+        } catch (err) {
+            logError(err);
+            return;
+        }
 
         fs.writeFileSync(path.join(dumpFolder, "GetPersonaInfo.xml"), PersonaInfo.data);
         console.log("Driver Info successfully dumped! (GetPersonaInfo.xml)");
@@ -249,8 +326,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         await sleep(1000);
 
         // Dump driver base info
-        const PersonaBase = await requests.GetPersonaBase(personaId);
-        if (PersonaBase.status >= 400) return console.log({ error: PersonaBase.data, solution: "Unknown" });
+        let PersonaBase;
+
+        try {
+            PersonaBase = await requests.GetPersonaBase(personaId);
+        } catch (err) {
+            logError(err);
+            return;
+        }
 
         fs.writeFileSync(path.join(dumpFolder, "GetPersonaBase.xml"), PersonaBase.data);
         console.log("Driver Base Info successfully dumped! (GetPersonaBase.xml)");
@@ -259,8 +342,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
         if (!dumpSomeone) {
             // Log out
-            const Logout = await requests.SecureLogout(personaId);
-            if (Logout.status >= 400) return console.log({ error: Logout.data, solution: "Unknown" });
+            let Logout;
+            
+            try {
+                Logout = await requests.SecureLogout(personaId);
+            } catch (err) {
+                logError(err);
+                return;
+            }
         }
 
         console.log(`\nLogged out of ${config.email}`);
@@ -281,4 +370,8 @@ async function askQuestion(question) {
         ReadLine.question(question, (ans) => resolve(ans));
     })
     return promise;
+}
+
+function logError(msg) {
+    console.log(`\x1b[31mERROR\x1b[0m:`, msg);
 }

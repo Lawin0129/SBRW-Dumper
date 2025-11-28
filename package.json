@@ -1,11 +1,10 @@
 {
   "name": "sbrw-dumper",
   "version": "1.0.0",
-  "description": "A program made for soapbox race world which is a revival of need for speed world, this program saves the user's cars, driver info, etc for offline use.",
+  "description": "A program made for Soapbox Race World which is a revival of Need for Speed World. This program saves the user's cars, driver info, etc from a specified SBRW server for offline use or archival purposes.",
   "main": "src/index.js",
   "dependencies": {
-    "axios": "^1.2.6",
-    "xml2js": "^0.4.23"
+    "xml2js": "0.6.2"
   },
   "devDependencies": {},
   "scripts": {
@@ -17,11 +16,15 @@
     "url": "git+https://github.com/Lawin0129/SBRW-Dumper.git"
   },
   "keywords": [
+    "dumper",
+    "nodejs",
     "sbrw",
-    "dumper"
+    "soapbox",
+    "soapbox-race",
+    "soapboxraceworld"
   ],
   "author": "Lawin0129",
-  "license": "GPL-3.0-or-later",
+  "license": "GPL-3.0",
   "bugs": {
     "url": "https://github.com/Lawin0129/SBRW-Dumper/issues"
   },

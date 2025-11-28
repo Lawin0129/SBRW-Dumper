@@ -20,10 +20,9 @@ This is what the program dumps if you choose to dump someone elses data:
 # How to use this program
 1) Install [NodeJS](https://nodejs.org/en/).
 2) Download and Extract SBRW Dumper to a safe location.
-3) Run "install_packages.bat" to install all the required modules.
-4) Go to Config/config.json in the directory you extracted SBRW Dumper into.
-5) Open it, enter your email and password then save it.
-6) Run "start.bat", if there is no errors, it should work.
+3) Go to Config/config.json in the directory you extracted SBRW Dumper into.
+4) Open it, enter your email and password then save it.
+5) Run "start.bat", if there is no errors, it should work.
 # Example of dumping your own data
 ![Animation](https://user-images.githubusercontent.com/56766256/221670305-08232120-3ba7-483f-83e4-d5704274c7b4.gif)
 # Example of dumping someone elses data

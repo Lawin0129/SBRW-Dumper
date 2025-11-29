@@ -10,23 +10,52 @@ function decompressBody(buffer, encoding) {
     }
 
     return new Promise((resolve, reject) => {
-        if (encoding == "gzip") {
-            zlib.gunzip(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
-        } else if (encoding == "deflate") {
-            zlib.inflate(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
-        } else if (encoding == "br") {
-            if ((typeof zlib.brotliDecompress) == "function") {
-                zlib.brotliDecompress(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
-            } else {
-                reject(new Error("Brotli encoding not supported in this Node version."));
+        switch (encoding) {
+            case "gzip": {
+                zlib.gunzip(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
+                break;
             }
-        } else {
-            resolve(buffer);
+
+            case "deflate": {
+                zlib.inflate(buffer, (err, decoded) => {
+                    if (!err) return resolve(decoded);
+                    
+                    // fallback for some servers that send raw deflate
+                    zlib.inflateRaw(buffer, (err2, decoded2) => {
+                        if (err2) return reject(err);
+                        resolve(decoded2);
+                    });
+                });
+                break;
+            }
+
+            case "br": {
+                if ((typeof zlib.brotliDecompress) == "function") {
+                    zlib.brotliDecompress(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
+                } else {
+                    reject(new Error("Brotli encoding not supported in this Node version."));
+                }
+                break;
+            }
+            
+            case "zstd": {
+                if ((typeof zlib.zstdDecompress) == "function") {
+                    zlib.zstdDecompress(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
+                } else {
+                    reject(new Error("Zstandard encoding not supported in this Node version."));
+                }
+                break;
+            }
+            
+            default: {
+                resolve(buffer);
+                break;
+            }
         }
     });
 }
 
-function makeRequest(method, url, { headers = {}, body, timeoutMS = 60000 } = {}) {
+function makeRequest(method, url, { headers = {}, body, timeoutMS = 60000, MAX_REDIRECTS = 10, redirectCount = 0 } = {}) {
     const requestModule = url.toLowerCase().startsWith("https:") ? https : http;
     let isDone = false;
     
@@ -39,6 +68,40 @@ function makeRequest(method, url, { headers = {}, body, timeoutMS = 60000 } = {}
             res.on("end", () => {
                 if (isDone) return;
                 isDone = true;
+                
+                // handle redirection
+                if ((res.statusCode >= 300) && (res.statusCode < 400) && res.headers.location) {
+                    if (redirectCount >= MAX_REDIRECTS) {
+                        reject(new Error(`Too many redirects (>${MAX_REDIRECTS})`));
+                        return;
+                    }
+
+                    const redirectURL = new URL(res.headers.location, url).toString();
+
+                    let newMethod = method;
+                    let newBody = body;
+                    let newHeaders = { ...headers };
+                    if (res.statusCode == 303) {
+                        newMethod = "GET";
+                        newBody = undefined;
+                        
+                        for (const headerName of Object.keys(newHeaders)) {
+                            if ((headerName.toLowerCase() == "content-length") || (headerName.toLowerCase() == "content-type")) {
+                                delete newHeaders[headerName];
+                            }
+                        }
+                    }
+                    
+                    makeRequest(newMethod, redirectURL, {
+                        headers: newHeaders,
+                        body: newBody,
+                        timeoutMS,
+                        MAX_REDIRECTS,
+                        redirectCount: (redirectCount + 1)
+                    }).then(resolve).catch(reject);
+                    
+                    return;
+                }
 
                 const buffer = Buffer.concat(resData);
                 const encoding = res.headers["content-encoding"];
@@ -59,7 +122,7 @@ function makeRequest(method, url, { headers = {}, body, timeoutMS = 60000 } = {}
                         if (isJSON) respData.data = JSON.parse(dataString);
                     } catch {}
                     
-                    if (res.statusCode >= 400) {
+                    if (res.statusCode >= 300) {
                         reject(respData);
                         return;
                     }

@@ -1,7 +1,6 @@
 const request = require("../../src/utils/request");
 const crypto = require("crypto");
-const xml2js = require("xml2js");
-const XML2JS = new xml2js.Parser();
+const xmlParser = require("../utils/xmlParser");
 
 let SbrwServer;
 let AuthToken;
@@ -74,9 +73,7 @@ async function authenticateUser(email, password, server) {
     if (!modernAuth) {
         const auth = await request.get(`${SbrwServer}/User/authenticateUser?email=${email}&password=${crypto.createHash("sha1").update(password).digest("hex")}`, sbrwAuthenticationHeaders);
 
-        let authData;
-
-        XML2JS.parseString(auth.data, (err, result) => authData = result);
+        let authData = await xmlParser.parseXML(auth.data);
 
         userId = authData.LoginStatusVO.UserId[0];
         LoginToken = authData.LoginStatusVO.LoginToken[0];
@@ -97,9 +94,7 @@ async function authenticateUser(email, password, server) {
         
     console.log("Successfully got Permanent Session!");
     
-    let sessionData;
-    
-    XML2JS.parseString(session.data, (err, result) => sessionData = result);
+    let sessionData = await xmlParser.parseXML(session.data);
     
     AuthToken = sessionData.UserInfo.user[0].securityToken[0];
     UserID = userId;

@@ -1,7 +1,4 @@
 const config = require("../Config/config.json");
-const xml2js = require("xml2js");
-const XML2JS = new xml2js.Parser();
-const builder = new xml2js.Builder({ renderOpts: { pretty: false }, headless: true });
 const fs = require("fs");
 const path = require("path");
 const ReadLine = require("readline").createInterface({
@@ -9,7 +6,8 @@ const ReadLine = require("readline").createInterface({
     output: process.stdout
 });
 
-const requests = require("./services/sbrw");
+const xmlParser = require("./utils/xmlParser");
+const sbrw = require("./services/sbrw");
 
 ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answer) => {
     let dumpSomeone = false;
@@ -24,7 +22,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         let serverList;
 
         try {
-            serverList = await requests.GetServerList();
+            serverList = await sbrw.GetServerList();
         } catch (err) {
             logError({ error: err, solution: "Unknown" });
             return;
@@ -72,14 +70,13 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         let session;
         
         try {
-            session = await requests.authenticateUser(config.email, config.password, server.url);
+            session = await sbrw.authenticateUser(config.email, config.password, server.url);
         } catch (err) {
             logError(err);
             return;
         }
 
-        let sessionData;
-        XML2JS.parseString(session.data, (err, result) => sessionData = result);
+        let sessionData = await xmlParser.parseXML(session.data);
 
         // Select driver
         if (!dumpSomeone) {
@@ -124,51 +121,48 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let driverSearch;
             
             try {
-                driverSearch = await requests.GetPersonaPresence(driver);
+                driverSearch = await sbrw.GetPersonaPresence(driver);
             } catch (err) {
                 logError(err);
                 console.log("This driver does not exist, please enter a valid driver name next time.");
                 return;
             }
 
-            XML2JS.parseString(driverSearch.data, (err, result) => driverSearch = result);
+            let parsedSearch = await xmlParser.parseXML(driverSearch.data);
+            personaId = parsedSearch.PersonaPresence.personaId[0];
 
-            personaId = driverSearch.PersonaPresence.personaId[0];
-
-            let PersonaInfo;
+            let personaInfo;
 
             try {
-                PersonaInfo = await requests.GetPersonaInfo(personaId);
+                personaInfo = await sbrw.GetPersonaInfo(personaId);
             } catch (err) {
                 logError(err);
                 return;
             }
 
-            XML2JS.parseString(PersonaInfo.data, (err, result) => PersonaInfo = result);
+            let parsedPersonaInfo = await xmlParser.parseXML(personaInfo.data);
 
-            dumpFolder = path.join(dumpFolder, `${PersonaInfo.ProfileData.Name[0]} (${personaId})`);
+            dumpFolder = path.join(dumpFolder, `${parsedPersonaInfo.ProfileData.Name[0]} (${personaId})`);
             if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
 
             dumpFolder = path.join(dumpFolder, newDate);
             fs.mkdirSync(dumpFolder);
 
-            console.log(`\nDriver ${PersonaInfo.ProfileData.Name[0]} (personaId: ${personaId}) will now be dumped...\n`);
+            console.log(`\nDriver ${parsedPersonaInfo.ProfileData.Name[0]} (personaId: ${personaId}) will now be dumped...\n`);
         } else if (Number(option) == 2) {
             const persona = await askQuestion("\nEnter a personaId to dump: ");
 
-            let personaResults;
             let PersonaInfo;
 
             try {
-                PersonaInfo = await requests.GetPersonaInfo(persona);
+                PersonaInfo = await sbrw.GetPersonaInfo(persona);
             } catch (err) {
                 logError(err);
                 console.log("The personaId you entered does not exist, please enter a valid personaId next time.");
                 return;
             }
 
-            XML2JS.parseString(PersonaInfo.data, (err, result) => personaResults = result);
-
+            let personaResults = await xmlParser.parseXML(PersonaInfo.data);
             personaId = personaResults.ProfileData.PersonaId[0];
 
             dumpFolder = path.join(dumpFolder, `${personaResults.ProfileData.Name[0]} (${personaId})`);
@@ -187,7 +181,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let loginPersona;
 
             try {
-                loginPersona = await requests.SecureLoginPersona(personaId);
+                loginPersona = await sbrw.SecureLoginPersona(personaId);
             } catch (err) {
                 logError(err);
                 return;
@@ -199,20 +193,22 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         await sleep(1000);
 
         // Dump owned cars
-        let CarSlots;
+        let Cars;
 
         try {
-            CarSlots = await requests.CarSlots(personaId, { dumpSomeone });
+            Cars = await sbrw.CarSlots(personaId, { dumpSomeone });
         } catch (err) {
             logError(err);
             return;
         }
 
-        // some trolling
+        // convert cars into carslots
         if (dumpSomeone) {
-            let carsResults;
+            let carsResults = await xmlParser.parseXML(Cars.data);
+
             let DefaultCar;
             let defaultCarResults;
+
             let carslotsTemplate = {
                 CarSlotInfoTrans: {
                     CarsOwnedByPersona: [{ OwnedCarTrans: [] }],
@@ -223,25 +219,24 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             }
 
             try {
-                DefaultCar = await requests.DefaultCar(personaId);
+                DefaultCar = await sbrw.DefaultCar(personaId);
             } catch {}
 
-            XML2JS.parseString(CarSlots.data, (err, result) => carsResults = result);
-            if (DefaultCar?.status == 200) XML2JS.parseString(DefaultCar.data, (err, result) => defaultCarResults = result);
+            if (DefaultCar) defaultCarResults = await xmlParser.parseXML(DefaultCar.data);
 
             if (defaultCarResults) {
                 let carIndex = carsResults.ArrayOfOwnedCarTrans.OwnedCarTrans.findIndex(i => JSON.stringify(i) == JSON.stringify(defaultCarResults.OwnedCarTrans));
 
-                if (carIndex) {
-                    carslotsTemplate.CarSlotInfoTrans.DefaultOwnedCarIndex[0] = `${carIndex}`;
+                if (carIndex != -1) {
+                    carslotsTemplate.CarSlotInfoTrans.DefaultOwnedCarIndex = [`${carIndex}`];
                 }
             }
 
             carslotsTemplate.CarSlotInfoTrans.CarsOwnedByPersona[0].OwnedCarTrans = carsResults.ArrayOfOwnedCarTrans.OwnedCarTrans;
 
-            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), builder.buildObject(carslotsTemplate));
+            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), xmlParser.buildXML(carslotsTemplate));
         } else {
-            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), CarSlots.data);
+            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), Cars.data);
         }
 
         console.log("Car slots successfully dumped! (carslots.xml)");
@@ -253,7 +248,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let TreasureHunt;
 
             try {
-                TreasureHunt = await requests.GetTreasureHunt();
+                TreasureHunt = await sbrw.GetTreasureHunt();
             } catch (err) {
                 logError(err);
                 return;
@@ -268,7 +263,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let FriendsList;
 
             try {
-                FriendsList = await requests.GetFriendsList();
+                FriendsList = await sbrw.GetFriendsList();
             } catch (err) {
                 logError(err);
                 return;
@@ -283,7 +278,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let Achievements;
 
             try {
-                Achievements = await requests.GetAchievements();
+                Achievements = await sbrw.GetAchievements();
             } catch (err) {
                 logError(err);
                 return;
@@ -298,7 +293,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let Inventory;
 
             try {
-                Inventory = await requests.GetInventory();
+                Inventory = await sbrw.GetInventory();
             } catch (err) {
                 logError(err);
                 return;
@@ -314,7 +309,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         let PersonaInfo;
         
         try {
-            PersonaInfo = await requests.GetPersonaInfo(personaId);
+            PersonaInfo = await sbrw.GetPersonaInfo(personaId);
         } catch (err) {
             logError(err);
             return;
@@ -329,7 +324,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         let PersonaBase;
 
         try {
-            PersonaBase = await requests.GetPersonaBase(personaId);
+            PersonaBase = await sbrw.GetPersonaBase(personaId);
         } catch (err) {
             logError(err);
             return;
@@ -345,7 +340,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let Logout;
             
             try {
-                Logout = await requests.SecureLogout(personaId);
+                Logout = await sbrw.SecureLogout(personaId);
             } catch (err) {
                 logError(err);
                 return;

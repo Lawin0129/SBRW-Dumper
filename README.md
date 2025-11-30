@@ -4,6 +4,8 @@ Soapbox Race World is a revival of the popular multiplayer racing game "Need for
 You can find out more here: [https://soapboxrace.world/](https://soapboxrace.world/)
 # About this program
 This program dumps/saves your account data or someone else's data from your chosen soapbox race world server for offline use or archival purposes.
+
+Compatible with Node.js v14.0.0 up to the latest version.
 ### Option 1
 This is what the program dumps if you choose to dump your own data:
 - Your owned cars (carslots.xml)

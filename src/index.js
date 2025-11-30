@@ -7,12 +7,13 @@ const ReadLine = require("readline").createInterface({
 });
 
 const xmlParser = require("./utils/xmlParser");
-const sbrw = require("./services/sbrw");
+const SBRW = require("./services/sbrw");
 
 ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answer) => {
     let dumpSomeone = false;
     let personaId;
     let server;
+    let sbrwClient;
     let newDate = (new Date().toISOString()).replace(/:/ig, "-").replace("T", " ").replace("Z", "").split(".")[0]
     let dumpFolder = path.join(__dirname, "..", "Dumped");
 
@@ -22,7 +23,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         let serverList;
 
         try {
-            serverList = await sbrw.GetServerList();
+            serverList = await SBRW.getServerList();
         } catch (err) {
             logError({ error: err, solution: "Unknown" });
             return;
@@ -64,17 +65,22 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         dumpFolder = path.join(dumpFolder, server.name.replace(/[/\\?%*:|"<>]/g, ''));
         if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
 
+        sbrwClient = new SBRW(server.url);
+
         await sleep(1000);
 
         // Authenticate User and Get Session
         let session;
         
         try {
-            session = await sbrw.authenticateUser(config.email, config.password, server.url);
+            session = await sbrwClient.authenticateUser(config.email, config.password);
         } catch (err) {
             logError(err);
             return;
         }
+
+        console.log(`\nLogged in as ${config.email}\n`);
+        console.log("Successfully got Permanent Session!");
 
         let sessionData = await xmlParser.parseXML(session.data);
 
@@ -117,11 +123,11 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             dumpFolder = path.join(dumpFolder, newDate);
             fs.mkdirSync(dumpFolder);
         } else if (Number(option) == 1) {
-            const driver = await askQuestion("\nEnter a driver name to dump: ");
+            const driverName = await askQuestion("\nEnter a driver name to dump: ");
             let driverSearch;
             
             try {
-                driverSearch = await sbrw.GetPersonaPresence(driver);
+                driverSearch = await sbrwClient.getPersonaPresence(driverName);
             } catch (err) {
                 logError(err);
                 console.log("This driver does not exist, please enter a valid driver name next time.");
@@ -134,7 +140,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let personaInfo;
 
             try {
-                personaInfo = await sbrw.GetPersonaInfo(personaId);
+                personaInfo = await sbrwClient.getPersonaInfo(personaId);
             } catch (err) {
                 logError(err);
                 return;
@@ -155,7 +161,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let PersonaInfo;
 
             try {
-                PersonaInfo = await sbrw.GetPersonaInfo(persona);
+                PersonaInfo = await sbrwClient.getPersonaInfo(persona);
             } catch (err) {
                 logError(err);
                 console.log("The personaId you entered does not exist, please enter a valid personaId next time.");
@@ -181,7 +187,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let loginPersona;
 
             try {
-                loginPersona = await sbrw.SecureLoginPersona(personaId);
+                loginPersona = await sbrwClient.secureLoginPersona(personaId);
             } catch (err) {
                 logError(err);
                 return;
@@ -196,7 +202,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         let Cars;
 
         try {
-            Cars = await sbrw.CarSlots(personaId, { dumpSomeone });
+            Cars = await sbrwClient.getCarSlots(personaId, { dumpSomeone });
         } catch (err) {
             logError(err);
             return;
@@ -219,7 +225,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             }
 
             try {
-                DefaultCar = await sbrw.DefaultCar(personaId);
+                DefaultCar = await sbrwClient.getDefaultCar(personaId);
             } catch {}
 
             if (DefaultCar) defaultCarResults = await xmlParser.parseXML(DefaultCar.data);
@@ -248,7 +254,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let TreasureHunt;
 
             try {
-                TreasureHunt = await sbrw.GetTreasureHunt();
+                TreasureHunt = await sbrwClient.getTreasureHunt();
             } catch (err) {
                 logError(err);
                 return;
@@ -263,7 +269,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let FriendsList;
 
             try {
-                FriendsList = await sbrw.GetFriendsList();
+                FriendsList = await sbrwClient.getFriendsList();
             } catch (err) {
                 logError(err);
                 return;
@@ -278,7 +284,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let Achievements;
 
             try {
-                Achievements = await sbrw.GetAchievements();
+                Achievements = await sbrwClient.getAchievements();
             } catch (err) {
                 logError(err);
                 return;
@@ -293,7 +299,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let Inventory;
 
             try {
-                Inventory = await sbrw.GetInventory();
+                Inventory = await sbrwClient.getInventory();
             } catch (err) {
                 logError(err);
                 return;
@@ -309,7 +315,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         let PersonaInfo;
         
         try {
-            PersonaInfo = await sbrw.GetPersonaInfo(personaId);
+            PersonaInfo = await sbrwClient.getPersonaInfo(personaId);
         } catch (err) {
             logError(err);
             return;
@@ -324,7 +330,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         let PersonaBase;
 
         try {
-            PersonaBase = await sbrw.GetPersonaBase(personaId);
+            PersonaBase = await sbrwClient.getPersonaBase(personaId);
         } catch (err) {
             logError(err);
             return;
@@ -340,7 +346,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let Logout;
             
             try {
-                Logout = await sbrw.SecureLogout(personaId);
+                Logout = await sbrwClient.secureLogout(personaId);
             } catch (err) {
                 logError(err);
                 return;

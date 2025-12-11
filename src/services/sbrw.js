@@ -38,9 +38,10 @@ class SBRW {
     static async getServerList() {
         const serverList = await request.get("https://api.worldunited.gg/serverlist.json", SBRW.baseHeaders);
     
-        let servers = serverList.data.filter(s => s.category == "SBRW")
+        let servers = serverList.data
             .map(s => ({
                 id: s.id,
+                category: s.category,
                 name: s.name,
                 url: s.ip_address
             }));
@@ -98,25 +99,32 @@ class SBRW {
         
         // authenticate user
         if (!modernAuth) {
-            const auth = await request.get(`${this.#server_ip}/User/authenticateUser?email=${email}&password=${crypto.createHash("sha1").update(password).digest("hex")}`, this.authHeaders);
+            const auth = await request.get(
+                `${this.#server_ip}/User/authenticateUser?email=${email}&password=${crypto.createHash("sha1").update(password).digest("hex")}`,
+                this.#authHeaders
+            );
             
             let authData = await xmlParser.parseXML(auth.data);
             
             this.#account.loginToken = authData.LoginStatusVO.LoginToken[0];
             this.#account.userId = authData.LoginStatusVO.UserId[0];
         } else {
-            const newAuth = await request.post(`${this.#server_ip}/User/modernAuth`, { email: email, password: password, upgrade: true }, this.authHeaders);
+            const newAuth = await request.post(
+                `${this.#server_ip}/User/modernAuth`,
+                { email: email, password: password, upgrade: true },
+                this.#authHeaders
+            );
             
             this.#account.loginToken = newAuth.data.token;
             this.#account.userId = newAuth.data.userId;
         }
         
         // get game session when authenticated
-        const session = await request
-            .post(`${this.#server_ip}/User/GetPermanentSession`,
-                  '<GetPermanentSessionData xmlns="http://schemas.datacontract.org/2004/07/Victory.DataLayer.Serialization" xmlns:i="http://www.w3.org/2001/XMLSchema-instance"><machineID>000000000000000000</machineID><version>637</version></GetPermanentSessionData>',
-                  SBRW.gameHeaders(this.#account.loginToken, this.#account.userId)
-                 );
+        const session = await request.post(
+            `${this.#server_ip}/User/GetPermanentSession`,
+            '<GetPermanentSessionData xmlns="http://schemas.datacontract.org/2004/07/Victory.DataLayer.Serialization" xmlns:i="http://www.w3.org/2001/XMLSchema-instance"><machineID>000000000000000000</machineID><version>637</version></GetPermanentSessionData>',
+            SBRW.gameHeaders(this.#account.loginToken, this.#account.userId)
+        );
 
         let sessionData = await xmlParser.parseXML(session.data);
 
@@ -127,30 +135,30 @@ class SBRW {
     }
     
     async secureLogout(personaId) {
-        const Logout = await request
-            .post(`${this.#server_ip}/User/SecureLogout?userId=${this.#gameCredentials.userId}&personaId=${personaId}&exitCode=0`,
-                  "",
-                  SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                 );
+        const logout = await request.post(
+            `${this.#server_ip}/User/SecureLogout?userId=${this.#gameCredentials.userId}&personaId=${personaId}&exitCode=0`,
+            "",
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
 
-        return Logout;
+        return logout;
     }
     
     async secureLoginPersona(personaId) {
-        const loginPersona = await request
-            .post(`${this.#server_ip}/User/SecureLoginPersona?userId=${this.#gameCredentials.userId}&personaId=${personaId}`,
-                  "",
-                  SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                 );
+        const loginPersona = await request.post(
+            `${this.#server_ip}/User/SecureLoginPersona?userId=${this.#gameCredentials.userId}&personaId=${personaId}`,
+            "",
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
 
         return loginPersona;
     }
     
     async getDefaultCar(personaId) {
-        const defaultCar = await request
-            .get(`${this.#server_ip}/personas/${personaId}/defaultcar`,
-                 SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                );
+        const defaultCar = await request.get(
+            `${this.#server_ip}/personas/${personaId}/defaultcar`,
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
 
         return defaultCar;
     }
@@ -159,76 +167,76 @@ class SBRW {
         let cars = "carslots";
         if (dumpSomeone) cars = "cars";
         
-        const Carslots = await request
-            .get(`${this.#server_ip}/personas/${personaId}/${cars}?language=EN`,
-                 SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                );
+        const carslots = await request.get(
+            `${this.#server_ip}/personas/${personaId}/${cars}?language=EN`,
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
         
-        return Carslots;
+        return carslots;
     }
     
     async getTreasureHunt() {
-        const TreasureHunt = await request
-            .get(`${this.#server_ip}/events/gettreasurehunteventsession`,
-                 SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                );
+        const treasureHunt = await request.get(
+            `${this.#server_ip}/events/gettreasurehunteventsession`,
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
 
-        return TreasureHunt;
+        return treasureHunt;
     }
     
     async getFriendsList() {
-        const FriendsList = await request
-            .get(`${this.#server_ip}/getfriendlistfromuserid?userId=${this.#gameCredentials.userId}`,
-                 SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                );
+        const friendsList = await request.get(
+            `${this.#server_ip}/getfriendlistfromuserid?userId=${this.#gameCredentials.userId}`,
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
         
-        return FriendsList;
+        return friendsList;
     }
     
     async getAchievements() {
-        const Achievements = await request
-            .get(`${this.#server_ip}/achievements/loadall`,
-                 SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                );
+        const achievements = await request.get(
+            `${this.#server_ip}/achievements/loadall`,
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
         
-        return Achievements;
+        return achievements;
     }
     
     async getPersonaPresence(driverName) {
-        const PersonaPresence = await request
-            .get(`${this.#server_ip}/DriverPersona/GetPersonaPresenceByName?displayName=${driverName}`,
-                 SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                );
+        const personaPresence = await request.get(
+            `${this.#server_ip}/DriverPersona/GetPersonaPresenceByName?displayName=${driverName}`,
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
         
-        return PersonaPresence;
+        return personaPresence;
     }
     
     async getPersonaInfo(personaId) {
-        const PersonaInfo = await request
-            .get(`${this.#server_ip}/DriverPersona/GetPersonaInfo?personaId=${personaId}`,
-                 SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                );
+        const personaInfo = await request.get(
+            `${this.#server_ip}/DriverPersona/GetPersonaInfo?personaId=${personaId}`,
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
 
-        return PersonaInfo;
+        return personaInfo;
     }
     
     async getPersonaBase(personaId) {
-        const PersonaBase = await request
-            .post(`${this.#server_ip}/DriverPersona/GetPersonaBaseFromList`,
-                  `<PersonaIdArray xmlns="http://schemas.datacontract.org/2004/07/Victory.TransferObjects.DriverPersona" xmlns:i="http://www.w3.org/2001/XMLSchema-instance"><PersonaIds xmlns:array="http://schemas.microsoft.com/2003/10/Serialization/Arrays"><array:long>${personaId}</array:long></PersonaIds></PersonaIdArray>`,
-                  SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                 );
+        const personaBase = await request.post(
+            `${this.#server_ip}/DriverPersona/GetPersonaBaseFromList`,
+            `<PersonaIdArray xmlns="http://schemas.datacontract.org/2004/07/Victory.TransferObjects.DriverPersona" xmlns:i="http://www.w3.org/2001/XMLSchema-instance"><PersonaIds xmlns:array="http://schemas.microsoft.com/2003/10/Serialization/Arrays"><array:long>${personaId}</array:long></PersonaIds></PersonaIdArray>`,
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
 
-        return PersonaBase;
+        return personaBase;
     }
     
     async getInventory() {
-        const Inventory = await request
-            .get(`${this.#server_ip}/personas/inventory/objects`,
-                 SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
-                );
+        const inventory = await request.get(
+            `${this.#server_ip}/personas/inventory/objects`,
+            SBRW.gameHeaders(this.#gameCredentials.securityToken, this.#gameCredentials.userId)
+        );
 
-        return Inventory;
+        return inventory;
     }
 }
 

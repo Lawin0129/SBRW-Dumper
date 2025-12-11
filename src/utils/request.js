@@ -2,8 +2,15 @@ const https = require("https");
 const http = require("http");
 const zlib = require("zlib");
 
-function decompressBody(buffer, encoding) {
-    encoding = (encoding || "").toLowerCase();
+const removeContentHeaders = (resHeaders) => {
+    delete resHeaders["content-encoding"];
+    delete resHeaders["content-length"];
+};
+
+function decompressBody(buffer, resHeaders, noDecompress) {
+    if (noDecompress) return Promise.resolve(buffer);
+    
+    const encoding = (resHeaders["content-encoding"] || "").toLowerCase();
     
     if (!buffer || (buffer.length == 0)) {
         return Promise.resolve(buffer);
@@ -11,18 +18,21 @@ function decompressBody(buffer, encoding) {
 
     return new Promise((resolve, reject) => {
         switch (encoding) {
+            case "x-gzip":
             case "gzip": {
+                removeContentHeaders(resHeaders);
                 zlib.gunzip(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
                 break;
             }
 
             case "deflate": {
+                removeContentHeaders(resHeaders);
                 zlib.inflate(buffer, (err, decoded) => {
                     if (!err) return resolve(decoded);
                     
                     // fallback for some servers that send raw deflate
                     zlib.inflateRaw(buffer, (err2, decoded2) => {
-                        if (err2) return reject(err);
+                        if (err2) return reject(err); // reject with original inflate error
                         resolve(decoded2);
                     });
                 });
@@ -30,19 +40,17 @@ function decompressBody(buffer, encoding) {
             }
 
             case "br": {
-                if ((typeof zlib.brotliDecompress) == "function") {
-                    zlib.brotliDecompress(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
-                } else {
-                    reject(new Error("Brotli encoding not supported in this Node version."));
-                }
+                removeContentHeaders(resHeaders);
+                zlib.brotliDecompress(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
                 break;
             }
             
             case "zstd": {
                 if ((typeof zlib.zstdDecompress) == "function") {
+                    removeContentHeaders(resHeaders);
                     zlib.zstdDecompress(buffer, (err, decoded) => err ? reject(err) : resolve(decoded));
                 } else {
-                    reject(new Error("Zstandard encoding not supported in this Node version."));
+                    resolve(buffer);
                 }
                 break;
             }
@@ -55,8 +63,8 @@ function decompressBody(buffer, encoding) {
     });
 }
 
-function makeRequest(method, url, { headers = {}, body, timeoutMS = 60000, MAX_REDIRECTS = 10, redirectCount = 0 } = {}) {
-    const requestModule = url.toLowerCase().startsWith("https:") ? https : http;
+function makeRequest(method, url, { headers = {}, body, noDecompress = false, timeoutMS = 60000, MAX_REDIRECTS = 10, redirectCount = 0 } = {}) {
+    const requestModule = url.toString().toLowerCase().startsWith("https:") ? https : http;
     let isDone = false;
     
     return new Promise((resolve, reject) => {
@@ -76,7 +84,7 @@ function makeRequest(method, url, { headers = {}, body, timeoutMS = 60000, MAX_R
                         return;
                     }
 
-                    const redirectURL = new URL(res.headers.location, url).toString();
+                    const redirectURL = new URL(res.headers.location, url);
 
                     let newMethod = method;
                     let newBody = body;
@@ -95,6 +103,7 @@ function makeRequest(method, url, { headers = {}, body, timeoutMS = 60000, MAX_R
                     makeRequest(newMethod, redirectURL, {
                         headers: newHeaders,
                         body: newBody,
+                        noDecompress,
                         timeoutMS,
                         MAX_REDIRECTS,
                         redirectCount: (redirectCount + 1)
@@ -104,33 +113,40 @@ function makeRequest(method, url, { headers = {}, body, timeoutMS = 60000, MAX_R
                 }
 
                 const buffer = Buffer.concat(resData);
-                const encoding = res.headers["content-encoding"];
 
-                decompressBody(buffer, encoding).then(decodedBuffer => {
-                    const dataString = decodedBuffer.toString("utf8");
-
-                    let respData = {
-                        status: res.statusCode,
-                        headers: res.headers,
-                        data: dataString
-                    };
-                    
+                decompressBody(buffer, res.headers, noDecompress).then(decodedBuffer => {
                     const contentType = (res.headers["content-type"] ?? "").toLowerCase();
+
                     const isJSON = contentType.includes("json");
-                    
-                    try {
-                        if (isJSON) respData.data = JSON.parse(dataString);
-                    } catch {}
-                    
-                    if (res.statusCode >= 300) {
-                        reject(respData);
-                        return;
+                    const isTextLike = /^text\//.test(contentType) || isJSON || contentType.includes("xml");
+                    const encoding = res.headers["content-encoding"];
+
+                    let data = decodedBuffer;
+
+                    if (isTextLike && !encoding) {
+                        let text = decodedBuffer.toString("utf8");
+                        
+                        if (isJSON) {
+                            try {
+                                data = JSON.parse(text);
+                            } catch {
+                                data = text;
+                            }
+                        } else {
+                            data = text;
+                        }
                     }
                     
-                    resolve(respData);
+                    resolve({
+                        status: res.statusCode,
+                        headers: res.headers,
+                        data: data
+                    });
                 }).catch(err => reject(err));
             });
         });
+
+        req.on("error", reject);
         
         if (timeoutMS && (timeoutMS > 0)) {
             req.setTimeout(timeoutMS, () => {
@@ -139,8 +155,6 @@ function makeRequest(method, url, { headers = {}, body, timeoutMS = 60000, MAX_R
                 isDone = true;
             });
         }
-        
-        req.on("error", reject);
         
         if (body != undefined) {
             let payload;

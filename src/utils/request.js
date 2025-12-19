@@ -63,7 +63,7 @@ function decompressBody(buffer, resHeaders, noDecompress) {
     });
 }
 
-function makeRequest(method, url, { headers = {}, body, noDecompress = false, timeoutMS = 60000, MAX_REDIRECTS = 10, redirectCount = 0 } = {}) {
+function makeRequest(method, url, { headers = {}, body, noDecompress = false, timeoutMS = 60000, MAX_REDIRECTS = 50, redirectCount = 0 } = {}) {
     const requestModule = url.toString().toLowerCase().startsWith("https:") ? https : http;
     let isDone = false;
     
@@ -72,45 +72,49 @@ function makeRequest(method, url, { headers = {}, body, noDecompress = false, ti
             let resData = [];
             
             res.on("error", reject);
+
+            // handle redirection
+            if ((res.statusCode >= 300) && (res.statusCode < 400) && res.headers.location) {
+                // consume the response data to free it from memory
+                res.resume();
+
+                if (redirectCount >= MAX_REDIRECTS) {
+                    reject(new Error(`Too many redirects (>${MAX_REDIRECTS})`));
+                    return;
+                }
+                
+                const redirectURL = new URL(res.headers.location, url);
+                
+                let newMethod = method;
+                let newBody = body;
+                let newHeaders = { ...headers };
+                if (res.statusCode == 303) {
+                    newMethod = "GET";
+                    newBody = undefined;
+                    
+                    for (const headerName of Object.keys(newHeaders)) {
+                        if ((headerName.toLowerCase() == "content-length") || (headerName.toLowerCase() == "content-type")) {
+                            delete newHeaders[headerName];
+                        }
+                    }
+                }
+                
+                makeRequest(newMethod, redirectURL, {
+                    headers: newHeaders,
+                    body: newBody,
+                    noDecompress,
+                    timeoutMS,
+                    MAX_REDIRECTS,
+                    redirectCount: (redirectCount + 1)
+                }).then(resolve).catch(reject);
+                
+                return;
+            }
+
             res.on("data", (chunk) => resData.push(chunk));
             res.on("end", () => {
                 if (isDone) return;
                 isDone = true;
-                
-                // handle redirection
-                if ((res.statusCode >= 300) && (res.statusCode < 400) && res.headers.location) {
-                    if (redirectCount >= MAX_REDIRECTS) {
-                        reject(new Error(`Too many redirects (>${MAX_REDIRECTS})`));
-                        return;
-                    }
-
-                    const redirectURL = new URL(res.headers.location, url);
-
-                    let newMethod = method;
-                    let newBody = body;
-                    let newHeaders = { ...headers };
-                    if (res.statusCode == 303) {
-                        newMethod = "GET";
-                        newBody = undefined;
-                        
-                        for (const headerName of Object.keys(newHeaders)) {
-                            if ((headerName.toLowerCase() == "content-length") || (headerName.toLowerCase() == "content-type")) {
-                                delete newHeaders[headerName];
-                            }
-                        }
-                    }
-                    
-                    makeRequest(newMethod, redirectURL, {
-                        headers: newHeaders,
-                        body: newBody,
-                        noDecompress,
-                        timeoutMS,
-                        MAX_REDIRECTS,
-                        redirectCount: (redirectCount + 1)
-                    }).then(resolve).catch(reject);
-                    
-                    return;
-                }
 
                 const buffer = Buffer.concat(resData);
 

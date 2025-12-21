@@ -1,35 +1,33 @@
 const config = require("../Config/config.json");
-const fs = require("fs");
-const path = require("path");
 const ReadLine = require("readline").createInterface({
     input: process.stdin,
     output: process.stdout
 });
 
+const functions = require("./utils/functions");
 const xmlParser = require("./utils/xmlParser");
-const SBRW = require("./services/sbrw");
+
+const SBRW = require("./services/SBRW");
+const UserExporter = require("./services/UserExporter");
 
 ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answer) => {
     let dumpSomeone = false;
     let personaId;
     let server;
     let sbrwClient;
-    let newDate = (new Date().toISOString()).replace(/:/ig, "-").replace("T", " ").replace("Z", "").split(".")[0]
-    let dumpFolder = path.join(__dirname, "..", "Dumped");
+    let userExporter;
 
     if (Answer.toLowerCase() == "yes" || Answer.toLowerCase() == "y") {
-        if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
-
         let serverList;
 
         try {
             serverList = await SBRW.getServerList();
         } catch (err) {
-            logError(err);
+            functions.logError(err);
             return;
         }
 
-        if (serverList.status >= 300) return logError(serverList);
+        if (serverList.status >= 300) return functions.logError(serverList);
 
         const options = [
             { name: "Dump your own data", index: 0 },
@@ -40,18 +38,18 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         let optionString = "";
         options.forEach(a => optionString += ` [${a.index}] ${a.name}\n`);
 
-        const option = await askQuestion(`\nSelect an option:\n${optionString}`);
+        const option = await functions.askQuestion(`\nSelect an option:\n${optionString}`, ReadLine);
         
         if (!options.find(x => x.index == Number(option))) {
             console.log("ERROR: Not a valid option...\nClosing in 5 seconds...");
-            await sleep(5000);
+            await functions.sleep(5000);
             process.exit(0);
         }
 
         let servers = "";
         serverList.forEach((s, idx) => servers += ` [${idx}] ${s.name} (${s.category})\n`);
     
-        const ans = await askQuestion(`\nSelect a server:\n${servers}`);
+        const ans = await functions.askQuestion(`\nSelect a server:\n${servers}`, ReadLine);
     
         if (serverList[ans]) server = serverList[ans];
         if (serverList.find(i => i.name == ans)) server = serverList.find(i => i.name == ans);
@@ -60,16 +58,13 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
         if (!server) {
             console.log("ERROR: Not a valid option / server not found...\nClosing in 5 seconds...");
-            await sleep(5000);
+            await functions.sleep(5000);
             process.exit(0);
         }
 
-        dumpFolder = path.join(dumpFolder, server.name.replace(/[/\\?%*:|"<>]/g, ''));
-        if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
-
         sbrwClient = new SBRW(server.url);
 
-        await sleep(1000);
+        await functions.sleep(1000);
 
         // Authenticate User and Get Session
         let session;
@@ -77,11 +72,11 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         try {
             session = await sbrwClient.authenticateUser(config.email, config.password);
         } catch (err) {
-            logError(err);
+            functions.logError(err);
             return;
         }
 
-        if (session.status >= 300) return logError(session);
+        if (session.status >= 300) return functions.logError(session);
 
         console.log(`\nLogged in as ${config.email}\n`);
         console.log("Successfully got Permanent Session!");
@@ -92,7 +87,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         if (!dumpSomeone) {
             if (!sessionData.UserInfo.personas[0].ProfileData) {
                 console.log("\nERROR: This account is new, please set the driver up before you use this program.\nClosing in 5 seconds...");
-                await sleep(5000);
+                await functions.sleep(5000);
                 process.exit(0);
             }
 
@@ -106,7 +101,7 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let driverList = "";
             drivers.forEach(val => driverList += ` [${val.index}] ${val.name} (personaId: ${val.personaId})\n`);
 
-            const answer = await askQuestion(`\nSelect your driver:\n${driverList}`);
+            const answer = await functions.askQuestion(`\nSelect your driver:\n${driverList}`, ReadLine);
 
             let driver;
 
@@ -117,28 +112,26 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             if (driver) personaId = driver.personaId;
             else {
                 console.log("\nERROR: Not a driver, try again later.\nClosing in 5 seconds...");
-                await sleep(5000);
+                await functions.sleep(5000);
                 process.exit(0);
             }
 
-            dumpFolder = path.join(dumpFolder, `${driver.name} (${personaId})`);
-            if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
+            userExporter = new UserExporter(server.name, { personaName: driver.name, personaId: personaId });
 
-            dumpFolder = path.join(dumpFolder, newDate);
-            fs.mkdirSync(dumpFolder);
+            await userExporter.ensureDir();
         } else if (Number(option) == 1) {
-            const driverName = await askQuestion("\nEnter a driver name to dump: ");
+            const driverName = await functions.askQuestion("\nEnter a driver name to dump: ", ReadLine);
             let driverSearch;
             
             try {
                 driverSearch = await sbrwClient.getPersonaPresence(driverName);
             } catch (err) {
-                logError(err);
+                functions.logError(err);
                 return;
             }
 
             if (driverSearch.status >= 300) {
-                logError(driverSearch);
+                functions.logError(driverSearch);
                 console.log("This driver does not exist, please enter a valid driver name next time.");
                 return;
             }
@@ -151,35 +144,33 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             try {
                 personaInfo = await sbrwClient.getPersonaInfo(personaId);
             } catch (err) {
-                logError(err);
+                functions.logError(err);
                 return;
             }
 
-            if (personaInfo.status >= 300) return logError(personaInfo);
+            if (personaInfo.status >= 300) return functions.logError(personaInfo);
 
             let parsedPersonaInfo = await xmlParser.parseXML(personaInfo.data);
 
-            dumpFolder = path.join(dumpFolder, `${parsedPersonaInfo.ProfileData.Name[0]} (${personaId})`);
-            if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
+            userExporter = new UserExporter(server.name, { personaName: parsedPersonaInfo.ProfileData.Name[0], personaId: personaId });
 
-            dumpFolder = path.join(dumpFolder, newDate);
-            fs.mkdirSync(dumpFolder);
+            await userExporter.ensureDir();
 
-            console.log(`\nDriver ${parsedPersonaInfo.ProfileData.Name[0]} (personaId: ${personaId}) will now be dumped...\n`);
+            console.log(`\nDriver ${userExporter.persona.name} (personaId: ${userExporter.persona.id}) will now be dumped...\n`);
         } else if (Number(option) == 2) {
-            const persona = await askQuestion("\nEnter a personaId to dump: ");
+            const persona = await functions.askQuestion("\nEnter a personaId to dump: ", ReadLine);
 
             let personaInfo;
 
             try {
                 personaInfo = await sbrwClient.getPersonaInfo(persona);
             } catch (err) {
-                logError(err);
+                functions.logError(err);
                 return;
             }
             
             if (personaInfo.status >= 300) {
-                logError(personaInfo);
+                functions.logError(personaInfo);
                 console.log("The personaId you entered does not exist, please enter a valid personaId next time.");
                 return;
             }
@@ -187,17 +178,15 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             let personaResults = await xmlParser.parseXML(personaInfo.data);
             personaId = personaResults.ProfileData.PersonaId[0];
 
-            dumpFolder = path.join(dumpFolder, `${personaResults.ProfileData.Name[0]} (${personaId})`);
-            if (!fs.existsSync(dumpFolder)) fs.mkdirSync(dumpFolder);
+            userExporter = new UserExporter(server.name, { personaName: personaResults.ProfileData.Name[0], personaId: personaId });
 
-            dumpFolder = path.join(dumpFolder, newDate);
-            fs.mkdirSync(dumpFolder);
+            await userExporter.ensureDir();
 
-            console.log(`\nDriver ${personaResults.ProfileData.Name[0]} (personaId: ${personaId}) will now be dumped...\n`);
+            console.log(`\nDriver ${userExporter.persona.name} (personaId: ${userExporter.persona.id}) will now be dumped...\n`);
         }
 
         if (!dumpSomeone) {
-            await sleep(1000);
+            await functions.sleep(1000);
 
             // Login to specified driver
             let loginPersona;
@@ -205,28 +194,28 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             try {
                 loginPersona = await sbrwClient.secureLoginPersona(personaId);
             } catch (err) {
-                logError(err);
+                functions.logError(err);
                 return;
             }
 
-            if (loginPersona.status >= 300) return logError(loginPersona);
+            if (loginPersona.status >= 300) return functions.logError(loginPersona);
 
             console.log("\nSuccessfully logged in to driver!");
         }
 
-        await sleep(1000);
+        await functions.sleep(1000);
 
         // Dump owned cars
         let cars;
 
         try {
-            cars = await sbrwClient.getCarSlots(personaId, { dumpSomeone });
+            cars = await sbrwClient.getCarslots(personaId, { dumpSomeone });
         } catch (err) {
-            logError(err);
+            functions.logError(err);
             return;
         }
 
-        if (cars.status >= 300) return logError(cars);
+        if (cars.status >= 300) return functions.logError(cars);
 
         // convert cars into carslots
         if (dumpSomeone) {
@@ -260,14 +249,14 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
 
             carslotsTemplate.CarSlotInfoTrans.CarsOwnedByPersona[0].OwnedCarTrans = carsResults.ArrayOfOwnedCarTrans.OwnedCarTrans;
 
-            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), xmlParser.buildXML(carslotsTemplate));
+            await userExporter.saveCarslots(xmlParser.buildXML(carslotsTemplate));
         } else {
-            fs.writeFileSync(path.join(dumpFolder, "carslots.xml"), cars.data);
+            await userExporter.saveCarslots(cars.data);
         }
 
         console.log("Car slots successfully dumped! (carslots.xml)");
 
-        await sleep(1000);
+        await functions.sleep(1000);
 
         if (!dumpSomeone) {
             // Dump treasure hunt info
@@ -276,16 +265,16 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             try {
                 treasureHunt = await sbrwClient.getTreasureHunt();
             } catch (err) {
-                logError(err);
+                functions.logError(err);
                 return;
             }
 
-            if (treasureHunt.status >= 300) return logError(treasureHunt);
+            if (treasureHunt.status >= 300) return functions.logError(treasureHunt);
 
-            fs.writeFileSync(path.join(dumpFolder, "gettreasurehunteventsession.xml"), treasureHunt.data);
+            await userExporter.saveTreasureHunt(treasureHunt.data);
             console.log("TreasureHuntSession successfully dumped! (gettreasurehunteventsession.xml)");
 
-            await sleep(1000);
+            await functions.sleep(1000);
 
             // Dump friends list
             let friendsList;
@@ -293,16 +282,16 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             try {
                 friendsList = await sbrwClient.getFriendsList();
             } catch (err) {
-                logError(err);
+                functions.logError(err);
                 return;
             }
 
-            if (friendsList.status >= 300) return logError(friendsList);
+            if (friendsList.status >= 300) return functions.logError(friendsList);
 
-            fs.writeFileSync(path.join(dumpFolder, "getfriendlistfromuserid.xml"), friendsList.data);
+            await userExporter.saveFriendsList(friendsList.data);
             console.log("FriendsList successfully dumped! (getfriendlistfromuserid.xml)");
 
-            await sleep(1000);
+            await functions.sleep(1000);
 
             // Dump achievements
             let achievements;
@@ -310,16 +299,16 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             try {
                 achievements = await sbrwClient.getAchievements();
             } catch (err) {
-                logError(err);
+                functions.logError(err);
                 return;
             }
 
-            if (achievements.status >= 300) return logError(achievements);
+            if (achievements.status >= 300) return functions.logError(achievements);
 
-            fs.writeFileSync(path.join(dumpFolder, "loadall.xml"), achievements.data);
+            await userExporter.saveAchievements(achievements.data);
             console.log("Achievements successfully dumped! (loadall.xml)");
 
-            await sleep(1000);
+            await functions.sleep(1000);
 
             // Dump inventory
             let inventory;
@@ -327,16 +316,16 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             try {
                 inventory = await sbrwClient.getInventory();
             } catch (err) {
-                logError(err);
+                functions.logError(err);
                 return;
             }
 
-            if (inventory.status >= 300) return logError(inventory);
+            if (inventory.status >= 300) return functions.logError(inventory);
 
-            fs.writeFileSync(path.join(dumpFolder, "objects.xml"), inventory.data);
+            await userExporter.saveInventory(inventory.data);
             console.log("Inventory successfully dumped! (objects.xml)");
         
-            await sleep(1000);
+            await functions.sleep(1000);
         }
 
         // Dump driver info
@@ -345,33 +334,33 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
         try {
             personaInfo = await sbrwClient.getPersonaInfo(personaId);
         } catch (err) {
-            logError(err);
+            functions.logError(err);
             return;
         }
 
-        if (personaInfo.status >= 300) return logError(personaInfo);
+        if (personaInfo.status >= 300) return functions.logError(personaInfo);
 
-        fs.writeFileSync(path.join(dumpFolder, "GetPersonaInfo.xml"), personaInfo.data);
+        await userExporter.savePersonaInfo(personaInfo.data);
         console.log("Driver Info successfully dumped! (GetPersonaInfo.xml)");
 
-        await sleep(1000);
+        await functions.sleep(1000);
 
         // Dump driver base info
-        let personaBase;
+        let personaBaseInfo;
 
         try {
-            personaBase = await sbrwClient.getPersonaBase(personaId);
+            personaBaseInfo = await sbrwClient.getPersonaBaseInfo(personaId);
         } catch (err) {
-            logError(err);
+            functions.logError(err);
             return;
         }
 
-        if (personaBase.status >= 300) return logError(personaBase);
+        if (personaBaseInfo.status >= 300) return functions.logError(personaBaseInfo);
 
-        fs.writeFileSync(path.join(dumpFolder, "GetPersonaBase.xml"), personaBase.data);
+        await userExporter.savePersonaBaseInfo(personaBaseInfo.data);
         console.log("Driver Base Info successfully dumped! (GetPersonaBase.xml)");
 
-        await sleep(1000);
+        await functions.sleep(1000);
 
         if (!dumpSomeone) {
             // Log out
@@ -380,33 +369,18 @@ ReadLine.question("Would you like to dump your SBRW data? (y/n)\n", async (Answe
             try {
                 logout = await sbrwClient.secureLogout(personaId);
             } catch (err) {
-                logError(err);
+                functions.logError(err);
                 return;
             }
 
-            if (logout.status >= 300) return logError(logout);
+            if (logout.status >= 300) return functions.logError(logout);
         }
 
         console.log(`\nLogged out of ${config.email}`);
 
     } else {
         console.log("Okay, have a good day.");
-        await sleep(2000)
+        await functions.sleep(2000);
         process.exit(0);
     }
 });
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function askQuestion(question) {
-    let promise = await new Promise((resolve, reject) => {
-        ReadLine.question(question, (ans) => resolve(ans));
-    })
-    return promise;
-}
-
-function logError(msg) {
-    console.log(`\x1b[31mERROR\x1b[0m:`, msg);
-}

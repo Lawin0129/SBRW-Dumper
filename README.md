@@ -26,6 +26,6 @@ This is what the program dumps if you choose to dump someone elses data:
 4) Open it, enter your email and password then save it.
 5) Run "start.bat", if there is no errors, it should work.
 # Example of dumping your own data
-![Animation](https://user-images.githubusercontent.com/56766256/221670305-08232120-3ba7-483f-83e4-d5704274c7b4.gif)
+![gif](https://github.com/Lawin0129/SBRW-Dumper/raw/refs/heads/main/examples/dumping_your_data.gif)
 # Example of dumping someone elses data
-![Animation2](https://user-images.githubusercontent.com/56766256/221672632-e07beb27-fa9f-4d35-b2cd-c0e9c8cacf93.gif)
+![gif2](https://github.com/Lawin0129/SBRW-Dumper/raw/refs/heads/main/examples/dumping_someones_data.gif)

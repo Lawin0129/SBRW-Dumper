@@ -37,6 +37,8 @@ class SBRW {
 
     static async getServerList() {
         const serverList = await request.get("https://api.worldunited.gg/serverlist.json", SBRW.baseHeaders);
+
+        if (serverList.status >= 300) throw serverList;
     
         let servers = serverList.data
             .map(s => ({
@@ -52,6 +54,7 @@ class SBRW {
     #serverUrl;
     #account;
     #gameCredentials;
+    #personas;
     #authHeaders;
     constructor(serverUrl) {
         this.#serverUrl = serverUrl;
@@ -63,6 +66,7 @@ class SBRW {
             securityToken: "",
             userId: 0
         };
+        this.#personas = [];
 
         this.#authHeaders = {
             ...SBRW.baseAuthenticationHeaders,
@@ -82,6 +86,10 @@ class SBRW {
     get gameCredentials() {
         return { ...this.#gameCredentials };
     }
+    
+    get personas() {
+        return [...this.#personas];
+    }
 
     get authHeaders() {
         return { ...this.#authHeaders };
@@ -95,6 +103,8 @@ class SBRW {
     
     async authenticateUser(email, password) {
         const serverInfo = await this.getServerInformation();
+        if (serverInfo.status >= 300) throw serverInfo;
+
         let modernAuth = serverInfo.data.modernAuthSupport || false;
         
         // authenticate user
@@ -103,6 +113,8 @@ class SBRW {
                 `${this.#serverUrl}/User/authenticateUser?email=${email}&password=${crypto.createHash("sha1").update(password).digest("hex")}`,
                 this.#authHeaders
             );
+
+            if (auth.status >= 300) throw auth;
             
             let authData = await xmlParser.parseXML(auth.data);
             
@@ -114,6 +126,8 @@ class SBRW {
                 { email: email, password: password, upgrade: true },
                 this.#authHeaders
             );
+
+            if (newAuth.status >= 300) throw newAuth;
             
             this.#account.loginToken = newAuth.data.token;
             this.#account.userId = newAuth.data.userId;
@@ -126,10 +140,21 @@ class SBRW {
             SBRW.gameHeaders(this.#account.loginToken, this.#account.userId)
         );
 
+        if (session.status >= 300) throw session;
+
         let sessionData = await xmlParser.parseXML(session.data);
 
         this.#gameCredentials.securityToken = sessionData.UserInfo.user[0].securityToken[0];
         this.#gameCredentials.userId = parseInt(sessionData.UserInfo.user[0].userId?.[0]) || 0;
+        
+        if (Array.isArray(sessionData.UserInfo?.personas?.[0]?.ProfileData)) {
+            this.#personas = sessionData.UserInfo.personas[0].ProfileData.map(
+                profileData => Object.freeze({
+                    personaId: profileData.PersonaId[0],
+                    name: profileData.Name[0]
+                })
+            );
+        }
 
         return session;
     }

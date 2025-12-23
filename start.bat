@@ -6,9 +6,5 @@ if not exist "node_modules" (
     call npm install
 )
 
-cls
-endlocal
-@echo on
-
 node src/index.js
 pause

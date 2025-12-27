@@ -10,6 +10,9 @@ module.exports = {
     saveAndGetMetadata: async (filePath, data) => {
         await fs.writeFile(filePath, data);
         
-        return await fs.stat(filePath);
+        return {
+            filePath: await fs.realpath(filePath),
+            metadata: await fs.stat(filePath)
+        };
     }
 }

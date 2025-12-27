@@ -8,7 +8,7 @@ class UserExporter {
     constructor(serverName, { personaName, personaId }) {
         this.#saveDirectoryPath = path.join(
             process.cwd(),
-            "Dumped",
+            "Exported",
             fsExtra.safeFileName(serverName),
             fsExtra.safeFileName(`${personaName} (${personaId})`),
             new Date().toISOString().replace(/:/ig, "-").replace("T", " ").replace("Z", "").split(".")[0]
@@ -36,36 +36,36 @@ class UserExporter {
 
     async #saveXml(fileName, data) {
         await this.ensureDir();
-        const filePath = path.join(this.#saveDirectoryPath, fileName);
+        const filePath = path.join(this.#saveDirectoryPath, `${fileName}.xml`);
         return await fsExtra.saveAndGetMetadata(filePath, data);
     }
 
     async savePersonaInfo(personaInfoData) {
-        return this.#saveXml("GetPersonaInfo.xml", personaInfoData);
+        return this.#saveXml("GetPersonaInfo", personaInfoData);
     }
     
     async savePersonaBaseInfo(personaBaseInfoData) {
-        return this.#saveXml("GetPersonaBase.xml", personaBaseInfoData);
+        return this.#saveXml("GetPersonaBase", personaBaseInfoData);
     }
     
     async saveCarslots(carslotsData) {
-        return this.#saveXml("carslots.xml", carslotsData);
+        return this.#saveXml("carslots", carslotsData);
     }
     
     async saveAchievements(achievementsData) {
-        return this.#saveXml("loadall.xml", achievementsData);
+        return this.#saveXml("loadall", achievementsData);
     }
     
     async saveInventory(inventoryData) {
-        return this.#saveXml("objects.xml", inventoryData);
+        return this.#saveXml("objects", inventoryData);
     }
 
     async saveTreasureHunt(treasureHuntData) {
-        return this.#saveXml("gettreasurehunteventsession.xml", treasureHuntData);
+        return this.#saveXml("gettreasurehunteventsession", treasureHuntData);
     }
     
     async saveFriendsList(friendsListData) {
-        return this.#saveXml("getfriendlistfromuserid.xml", friendsListData);
+        return this.#saveXml("getfriendlistfromuserid", friendsListData);
     }
 }
 

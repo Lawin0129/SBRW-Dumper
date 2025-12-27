@@ -3,29 +3,31 @@ Soapbox Race World is a revival of the popular multiplayer racing game "Need for
 
 You can find out more here: [https://soapboxrace.world/](https://soapboxrace.world/)
 # About this program
-This program dumps/saves your account data or someone else's data from your chosen soapbox race world server for offline use or archival purposes.
+This program exports your account data or someone else's data from your chosen Soapbox Race World server for offline use or archival purposes.
 
 Compatible with Node.js v14.6.0 up to the latest version.
 ### Option 1
-This is what the program dumps if you choose to dump your own data:
-- Your owned cars (carslots.xml)
+This is what the program exports if you choose to export your own data:
+- Your Owned Cars (carslots.xml)
+- Your Driver Info (GetPersonaInfo.xml & GetPersonaBase.xml)
+- Your Achievements (loadall.xml)
+- Your Inventory (objects.xml)
 - Your Treasure Hunt Info (gettreasurehunteventsession.xml)
-- Your friends list (getfriendlistfromuserid.xml)
-- Your achievements (loadall.xml)
-- Your driver info (GetPersonaInfo.xml & GetPersonaBase.xml)
-- Your inventory (objects.xml)
+- Your Friends List (getfriendlistfromuserid.xml)
 ### Option 2
-This is what the program dumps if you choose to dump someone elses data:
-- Their owned cars (carslots.xml)
-- Their driver info (GetPersonaInfo.xml & GetPersonaBase.xml)
-### Everything will be saved into a folder called "Dumped".
+This is what the program exports if you choose to export someone else's data:
+- Their Owned Cars (carslots.xml)
+- Their Driver Info (GetPersonaInfo.xml & GetPersonaBase.xml)
+### Everything will be saved into a folder called "Exported".
 # How to use this program
 1) Install [NodeJS](https://nodejs.org/en/).
 2) Download and Extract SBRW Dumper to a safe location.
-3) Go to Config/config.json in the directory you extracted SBRW Dumper into.
+3) Go to `Config/config.json` in the directory you extracted SBRW Dumper into.
 4) Open it, enter your email and password then save it.
-5) Run "start.bat", if there is no errors, it should work.
+5) Run "start.bat", some dependencies will be installed if it's your first time running this.
+6) Select the correct server for your account and it should start exporting.
+7) Once finished, there should be a folder called "Exported" which is where the account data will go for each server and persona (driver).
 # Example of dumping your own data
-![gif](https://github.com/Lawin0129/SBRW-Dumper/raw/refs/heads/main/examples/dumping_your_data.gif)
+![gif](examples/dumping_your_data.gif)
 # Example of dumping someone elses data
-![gif2](https://github.com/Lawin0129/SBRW-Dumper/raw/refs/heads/main/examples/dumping_someones_data.gif)
+![gif2](examples/dumping_someones_data.gif)
